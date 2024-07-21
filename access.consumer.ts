@@ -11,13 +11,13 @@ async function sendDatatoWebSocket(data: any) {
   try {
     if (socketIO) {
       console.log('Sending data to WebSocket:', data);
-      socketIO.emit('data', data);
+      socketIO.emit('newAccess', data);
     } else {
       console.error('WebSocket client is not initialized');
     }
   } catch (error: any) {
     console.error('Error sending data to WebSocket:', error.message);
-  }
+  } 
 }
 
 async function connect() {
