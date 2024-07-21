@@ -1,51 +1,51 @@
-import mqtt from 'mqtt';
-const socketIoClient = require('socket.io-client');
-import { Socket } from 'socket.io-client';
+import amqp from 'amqplib';
+import { io, Socket } from 'socket.io-client';
 
-const USERNAME = "protectify";
-const PASSWORD = "adminadmin"; 
-const HOSTNAME = "54.144.149.49";
-const PORT = 1883;
-const MQTT_TOPIC = "esp32";
-const WEBSOCKET_SERVER_URL = "ws://localhost:80";
+const RABBITMQ_URL = "amqp://protectify:adminadmin@54.144.149.49:5672";
+const QUEUE_NAME = "authentication";
+const WEBSOCKET_SERVER_URL = "http://localhost:4001";
 
 let socketIO: Socket;
-let isRoomJoined = false; 
+
+async function sendDatatoWebSocket(data: any) {
+  try {
+    if (socketIO) {
+      console.log('Sending data to WebSocket:', data);
+      socketIO.emit('data', data);
+    } else {
+      console.error('WebSocket client is not initialized');
+    }
+  } catch (error: any) {
+    console.error('Error sending data to WebSocket:', error.message);
+  }
+}
 
 async function connect() {
   try {
-    const client = mqtt.connect(`mqtt://${USERNAME}:${PASSWORD}@${HOSTNAME}:${PORT}`);
+    // Connect to RabbitMQ
+    const connection = await amqp.connect(RABBITMQ_URL);
+    const channel = await connection.createChannel();
 
-    client.on('connect', () => {
-      console.log('Connected to MQTT broker');
-      client.subscribe(MQTT_TOPIC, (err) => {
-        if (err) {
-          console.error('Error subscribing to topic:', err.message);
-        }
-      });
+    await channel.assertQueue(QUEUE_NAME, {
+      durable: true
     });
 
-    client.on('error', (err) => {
-      console.error('MQTT connection error:', err.message);
-    });
+    console.log('Connected to RabbitMQ and subscribed to queue:', QUEUE_NAME);
 
-    client.on('message', (topic, message) => {
-      if (topic === MQTT_TOPIC) {
-        const parsedContent = JSON.parse(message.toString());
-        console.log('accessData:', parsedContent);
-
-        const userId = parsedContent.id;
-        
-        if (!isRoomJoined) {
-          socketIO.emit('joinRoom', userId);
-          isRoomJoined = true;
+    channel.consume(QUEUE_NAME, async (msg) => {
+      if (msg !== null) {
+        try {
+          const parsedContent = JSON.parse(msg.content.toString());
+          console.log('Received data from RabbitMQ:', parsedContent);
+          await sendDatatoWebSocket(parsedContent);
+          channel.ack(msg);
+        } catch (error: any) {
+          console.error('Error parsing RabbitMQ message:', error.message);
         }
-        
-        socketIO.emit('event-access', parsedContent);
       }
     });
 
-    socketIO = socketIoClient(WEBSOCKET_SERVER_URL, {
+    socketIO = io(WEBSOCKET_SERVER_URL, {
       transports: ['websocket'],
       path: '/socket.io'
     });
@@ -58,14 +58,12 @@ async function connect() {
       console.error('WebSocket connection error:', err.message);
     });
 
-    socketIO.on('disconnect', (reason: any) => {
+    socketIO.on('disconnect', (reason) => {
       console.error('WebSocket disconnected:', reason);
-      isRoomJoined = false; 
     });
 
   } catch (err: any) {
     console.error('Error during connection setup:', err.message);
-    throw new Error(err);
   }
 }
 
