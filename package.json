@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "tsnd --respawn --clear access.consumer.ts"
+    "dev": "tsnd --respawn --clear access.consumer.ts",
+    "build": "tsc",
+    "start": "node access.consumer.js"
   },
   "keywords": [],
   "author": "",
